@@ -1,4 +1,5 @@
 use bevy::{
+    asset::HandleId,
     prelude::*,
     render::{
         render_asset::RenderAssets,
@@ -27,18 +28,18 @@ pub(crate) enum EguiTexture {
 }
 
 pub(crate) struct ExtractedEguiTextures {
-    pub(crate) font_textures: HashMap<WindowId, Handle<Image>>,
-    pub(crate) user_textures: HashMap<u64, Handle<Image>>,
+    pub(crate) font_textures: HashMap<WindowId, HandleId>,
+    pub(crate) user_textures: HashMap<HandleId, u64>,
 }
 impl ExtractedEguiTextures {
-    pub(crate) fn handles(&self) -> impl Iterator<Item = (EguiTexture, &Handle<Image>)> {
+    pub(crate) fn handles(&self) -> impl Iterator<Item = (EguiTexture, HandleId)> + '_ {
         self.font_textures
             .iter()
-            .map(|(&window, handle)| (EguiTexture::Font(window), handle))
+            .map(|(window, handle)| (EguiTexture::Font(*window), *handle))
             .chain(
                 self.user_textures
                     .iter()
-                    .map(|(&id, handle)| (EguiTexture::User(id), handle)),
+                    .map(|(handle, id)| (EguiTexture::User(*id), *handle)),
             )
     }
 }
@@ -67,7 +68,7 @@ pub(crate) fn extract_egui_textures(
         font_textures: egui_font_textures
             .0
             .iter()
-            .map(|(&window_id, (handle, _))| (window_id, handle.clone()))
+            .map(|(&window_id, (handle, _))| (window_id, handle.id))
             .collect(),
         user_textures: egui_context.egui_textures.clone(),
     });
@@ -153,8 +154,8 @@ pub(crate) fn queue_bind_groups(
 ) {
     let bind_groups = egui_textures
         .handles()
-        .filter_map(|(texture, handle)| {
-            let gpu_image = gpu_images.get(handle)?;
+        .filter_map(|(texture, handle_id)| {
+            let gpu_image = gpu_images.get(&Handle::weak(handle_id))?;
             let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
                 label: None,
                 layout: &egui_pipeline.texture_bind_group_layout,

@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin, EguiSettings};
 
-const BEVY_TEXTURE_ID: u64 = 0;
+struct Images {
+    bevy_icon: Handle<Image>,
+    bevy_icon_inverted: Handle<Image>,
+}
 
 /// This example demonstrates the following functionality and use-cases of bevy_egui:
 /// - rendering loaded assets;
@@ -29,9 +32,11 @@ struct UiState {
     inverted: bool,
 }
 
-fn load_assets(mut egui_context: ResMut<EguiContext>, assets: Res<AssetServer>) {
-    let texture_handle = assets.load("icon.png");
-    egui_context.set_egui_texture(BEVY_TEXTURE_ID, texture_handle);
+fn load_assets(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.insert_resource(Images {
+        bevy_icon: assets.load("icon.png"),
+        bevy_icon_inverted: assets.load("icon_inverted.png"),
+    });
 }
 
 fn configure_visuals(mut egui_ctx: ResMut<EguiContext>) {
@@ -64,11 +69,21 @@ fn update_ui_scale_factor(
 fn ui_example(
     mut egui_ctx: ResMut<EguiContext>,
     mut ui_state: ResMut<UiState>,
-    assets: Res<AssetServer>,
+    // You are not required to store Egui texture ids in systems. We store this one here just to
+    // demonstrate that rendering by using a texture id of a removed image is handled without
+    // making bevy_egui panic.
+    mut rendered_texture_id: Local<u64>,
+    mut is_initialized: Local<bool>,
+    images: Res<Images>,
 ) {
     let mut load = false;
     let mut remove = false;
     let mut invert = false;
+
+    if !*is_initialized {
+        *is_initialized = true;
+        *rendered_texture_id = egui_ctx.add_image(images.bevy_icon.clone_weak());
+    }
 
     egui::SidePanel::left("side_panel")
         .default_width(200.0)
@@ -93,7 +108,7 @@ fn ui_example(
             });
 
             ui.add(egui::widgets::Image::new(
-                egui::TextureId::User(BEVY_TEXTURE_ID),
+                egui::TextureId::User(*rendered_texture_id),
                 [256.0, 256.0],
             ));
 
@@ -151,15 +166,16 @@ fn ui_example(
         ui_state.inverted = !ui_state.inverted;
     }
     if load || invert {
-        let texture_handle = if ui_state.inverted {
-            assets.load("icon_inverted.png")
+        // If an image is already added to the context, it'll return an existing texture id.
+        if ui_state.inverted {
+            *rendered_texture_id = egui_ctx.add_image(images.bevy_icon_inverted.clone_weak());
         } else {
-            assets.load("icon.png")
+            *rendered_texture_id = egui_ctx.add_image(images.bevy_icon.clone_weak());
         };
-        egui_ctx.set_egui_texture(BEVY_TEXTURE_ID, texture_handle);
     }
     if remove {
-        egui_ctx.remove_egui_texture(BEVY_TEXTURE_ID);
+        egui_ctx.remove_image(&images.bevy_icon);
+        egui_ctx.remove_image(&images.bevy_icon_inverted);
     }
 }
 

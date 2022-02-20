@@ -62,7 +62,7 @@ use render_systems::EguiTransforms;
 use crate::systems::*;
 use bevy::{
     app::{App, CoreStage, Plugin, StartupStage},
-    asset::Handle,
+    asset::{Handle, HandleId},
     ecs::schedule::{ParallelSystemDescriptorCoercion, SystemLabel},
     input::InputSystem,
     log,
@@ -207,7 +207,8 @@ pub struct EguiOutput {
 #[derive(Clone)]
 pub struct EguiContext {
     ctx: HashMap<WindowId, egui::CtxRef>,
-    egui_textures: HashMap<u64, Handle<Image>>,
+    egui_textures: HashMap<HandleId, u64>,
+    last_texture_id: u64,
     mouse_position: Option<(WindowId, egui::Vec2)>,
 }
 
@@ -216,6 +217,7 @@ impl EguiContext {
         Self {
             ctx: HashMap::default(),
             egui_textures: Default::default(),
+            last_texture_id: 0,
             mouse_position: None,
         }
     }
@@ -288,7 +290,7 @@ impl EguiContext {
         &mut self,
         ids: [WindowId; N],
     ) -> [&egui::CtxRef; N] {
-        let mut unique_ids = std::collections::HashSet::new();
+        let mut unique_ids = bevy::utils::HashSet::default();
         assert!(
             ids.iter().all(move |id| unique_ids.insert(id)),
             "Window ids passed to `EguiContext::ctx_for_windows_mut` must be unique: {:?}",
@@ -307,7 +309,7 @@ impl EguiContext {
         &mut self,
         ids: [WindowId; N],
     ) -> [Option<&egui::CtxRef>; N] {
-        let mut unique_ids = std::collections::HashSet::new();
+        let mut unique_ids = bevy::utils::HashSet::default();
         assert!(
             ids.iter().all(move |id| unique_ids.insert(id)),
             "Window ids passed to `EguiContext::ctx_for_windows_mut` must be unique: {:?}",
@@ -319,30 +321,24 @@ impl EguiContext {
     /// Can accept either a strong or a weak handle.
     ///
     /// You may want to pass a weak handle if you control removing texture assets in your
-    /// application manually and you don't want to bother with cleaning up textures in egui.
+    /// application manually and you don't want to bother with cleaning up textures in Egui.
     ///
-    /// You'll want to pass a strong handle if a texture is used only in egui and there's no
+    /// You'll want to pass a strong handle if a texture is used only in Egui and there's no
     /// handle copies stored anywhere else.
-    pub fn set_egui_texture(&mut self, id: u64, texture: Handle<Image>) {
-        log::debug!("Set egui texture: {:?}", texture);
-        self.egui_textures.insert(id, texture);
+    pub fn add_image(&mut self, image: Handle<Image>) -> u64 {
+        *self.egui_textures.entry(image.id).or_insert_with(|| {
+            let id = self.last_texture_id;
+            log::debug!("Add a new image (id: {}, handle: {:?})", id, image);
+            self.last_texture_id += 1;
+            id
+        })
     }
 
-    /// Removes a texture handle associated with the id.
-    pub fn remove_egui_texture(&mut self, id: u64) {
-        let texture_handle = self.egui_textures.remove(&id);
-        log::debug!("Remove egui texture: {:?}", texture_handle);
-    }
-
-    // Is called when we get an event that a texture asset is removed.
-    fn remove_texture(&mut self, texture_handle: &Handle<Image>) {
-        log::debug!("Removing egui handles: {:?}", texture_handle);
-        self.egui_textures = self
-            .egui_textures
-            .iter()
-            .map(|(id, texture)| (*id, texture.clone()))
-            .filter(|(_, texture)| texture != texture_handle)
-            .collect();
+    /// Removes the image handle and an Egui texture id associated with it.
+    pub fn remove_image(&mut self, image: &Handle<Image>) -> Option<u64> {
+        let id = self.egui_textures.remove(&image.id);
+        log::debug!("Remove image (id: {:?}, handle: {:?})", id, image);
+        id
     }
 }
 
@@ -488,7 +484,7 @@ fn update_egui_textures(
 
     for image_event in image_events.iter() {
         if let AssetEvent::Removed { handle } = image_event {
-            egui_context.remove_texture(handle);
+            egui_context.remove_image(handle);
         }
     }
 }
