@@ -73,7 +73,7 @@ fn create_new_window(
         descriptor: WindowDescriptor {
             width: 800.,
             height: 600.,
-            vsync: false,
+            present_mode: bevy::window::PresentMode::Fifo,
             title: "Second window".to_string(),
             ..Default::default()
         },

@@ -68,14 +68,13 @@ use bevy::{
     log,
     prelude::{AssetEvent, Assets, Commands, EventReader, ResMut},
     render::{render_graph::RenderGraph, texture::Image, RenderApp, RenderStage},
-    utils::HashMap,
+    utils::{HashMap, hashbrown::hash_map::Entry},
     window::WindowId,
 };
 #[cfg(all(feature = "manage_clipboard", not(target_arch = "wasm32")))]
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(all(feature = "manage_clipboard", not(target_arch = "wasm32")))]
 use std::cell::{RefCell, RefMut};
-use std::collections::hash_map::Entry;
 #[cfg(all(feature = "manage_clipboard", not(target_arch = "wasm32")))]
 use thread_local::ThreadLocal;
 
@@ -534,7 +533,7 @@ pub fn setup_pipeline(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::{render::options::WgpuOptions, winit::WinitPlugin, DefaultPlugins};
+    use bevy::{winit::WinitPlugin, DefaultPlugins, render::settings::WgpuSettings};
 
     #[test]
     fn test_readme_deps() {
@@ -544,7 +543,7 @@ mod tests {
     #[test]
     fn test_headless_mode() {
         App::new()
-            .insert_resource(WgpuOptions {
+            .insert_resource(WgpuSettings {
                 backends: None,
                 ..Default::default()
             })
